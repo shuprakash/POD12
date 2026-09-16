@@ -17,9 +17,39 @@ from support import (MODEL, SYSTEM_PROMPT, call_local, execute_tool, mcp_client,
 MAX_TOOL_CALLS = 8  # Larkspur's own build capped the loop here; then a human takes over.
 
 TONE_ADDENDUM = ""                       # ✏️ Build 4, step 4.1, intelligence lane
-EXTRA_TOOLS: List[Dict[str, Any]] = []   # ✏️ Build 2, step 2.1: schemas for the tools you add
+EXTRA_TOOLS: List[Dict[str, Any]] = [
+    {
+        "name": "next_available_day",
+        "description": (
+            "Finds the earliest date with at least one open seat between an origin and "
+            "destination, starting from a given date. NOTE: This function only checks "
+            "for a single seat (party of one). If the booking has multiple passengers, "
+            "do not promise they can all fly on this day without checking full capacity. "
+            "Call this only after you know the origin, destination, and the date to "
+            "start searching from."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "origin": {"type": "string"},
+                "dest": {"type": "string"},
+                "date": {"type": "string", "description": "YYYY-MM-DD"},
+                "cabin": {"type": "string", "default": "Y"}
+            },
+            "required": ["origin", "dest", "date"]
+        }
+    }
+]
+# LOCAL_TOOLS: Dict[str, Any] = {
+#     "next_available_day": next_available_day
+# }
 LOCAL_TOOLS: Dict[str, Any] = {}         # ✏️ Build 2, step 2.1: the functions behind them
-
+# Step 2.2: next_available_day is served by the MCP server, which carried it all
+# along, so the local registration came out. Only one program may own a tool name:
+# tool_results() checks mcp_client.tool_names before LOCAL_TOOLS, so a local copy
+# of an MCP name is unreachable code that still looks live. The schema stays in
+# EXTRA_TOOLS either way -- Claude still has to be told the tool exists.
+ 
 
 def text_of(response) -> str:
     """Given. The last non-empty text block, never content[0]."""
@@ -117,36 +147,14 @@ def build_tools() -> List[Dict[str, Any]]:                 # ✏️ Build 1, ste
                 "type": "object",
                 "properties": {
                     "flight_no": {"type": "string"},
-                    "date": {
-                        "type": "string",
-                        "description": (
-                            "The flight's local departure date as YYYY-MM-DD (ISO-8601), "
-                            "e.g. 2025-05-08. Any other format is rejected. Use the date "
-                            "on the segment returned by lookup_booking, not today's date."
-                        ),
-                    },
+                    "date": {"type": "string", "description": "YYYY-MM-DD"},
                 },
                 "required": ["flight_no", "date"],
             },
         },
         {
             "name": "search_alternatives",
-            "description": (
-                "Find the specific Larkspur flights this customer could actually be moved "
-                "to after a delay, cancellation or misconnect. Call this whenever the "
-                "customer's flight will not get them there and rebooking is on the table, "
-                "before you describe their options: a customer whose flight was cancelled "
-                "wants flight numbers and departure times, not an offer to go looking. "
-                "Do not ask them whether they want you to search, and do not name a "
-                "replacement flight you have not seen here. Read the booking with "
-                "lookup_booking first so the PNR is confirmed; this tool works out the "
-                "route, date, cabin and passenger count from the booking itself, so the "
-                "PNR is all it needs. Returns options with an option_id, flight numbers, "
-                "times and seats left, plus excluded flights with the reason they do not "
-                "work and any other-cabin fallbacks. Quote the option_id when you take a "
-                "choice into hold_seat or check_policy. Availability is live, so search "
-                "again rather than reusing options from earlier in the conversation."
-            ),
+            "description": "Call this tool only when a customer requests or needs alternative flight options for rebooking due to a disruption. Requires only the booking PNR; do not ask the user for or provide dates or routes, as the tool automatically extracts travel context, excludes the current disrupted flight, and filters for available party seats from the booking record.",
             "input_schema": {
                 "type": "object",
                 "properties": {
