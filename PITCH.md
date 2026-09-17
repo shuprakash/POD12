@@ -4,7 +4,7 @@ Six lines and a lever. Your words. The last two are scored.
 
 Built: A disruption-care agent for Larkspur Airlines that autonomously handles passenger rebooking.
 Does: Looks up bookings, checks policies, finds alternative flights, and issues vouchers or holds seats.
-Number: Resolves 5 different disruption scenarios.
+Number: $0.14 per resolved contact, tested on n=5 shapes.
 Guardrail: The `confirm_rebooking` tool requires a confirmation token that only the customer's click can produce.
 Next: Adding support for multi-passenger bookings and native capacity checks.
 Still broken: The agent currently only checks alternative dates for a single passenger, requiring workarounds for groups.

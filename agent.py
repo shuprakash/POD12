@@ -16,7 +16,12 @@ from support import (MODEL, SYSTEM_PROMPT, call_local, execute_tool, mcp_client,
 
 MAX_TOOL_CALLS = 8  # Larkspur's own build capped the loop here; then a human takes over.
 
-TONE_ADDENDUM = ""                       # ✏️ Build 4, step 4.1, intelligence lane
+TONE_ADDENDUM = """
+CRITICAL INSTRUCTIONS:
+1. Legal threats & Abuse: If a customer threatens legal action (e.g., mentions a lawyer), acknowledge the complaint once, use `escalate_to_human`, and promise nothing. Do not provide a normal entitlements rundown and never offer a refund pathway into a legal threat.
+2. Refunds: If a customer asks for a refund, escalate it using `escalate_to_human` and state plainly that a human executes refunds. Do not merely say it is handled outside of disruption-care.
+3. On-time flights: If a flight is not disrupted, state the status clearly. Do not hedge (e.g., do not say 'check back later' or 'if you notice changes let me know').
+"""
 EXTRA_TOOLS: List[Dict[str, Any]] = [    # ✏️ Build 2, step 2.1: schemas for the tools you add
     {
         "name": "next_available_day",
@@ -75,6 +80,11 @@ EXTRA_TOOLS: List[Dict[str, Any]] = [    # ✏️ Build 2, step 2.1: schemas for
     },
 ]
 LOCAL_TOOLS: Dict[str, Any] = {}         # ✏️ Build 2, step 2.1: the functions behind them
+# Step 2.2: next_available_day is served by the MCP server, which carried it all
+# along, so the local registration came out. Only one program may own a tool name:
+# tool_results() checks mcp_client.tool_names before LOCAL_TOOLS, so a local copy
+# of an MCP name is unreachable code that still looks live. The schema stays in
+# EXTRA_TOOLS either way -- Claude still has to be told the tool exists.
 
 
 def text_of(response) -> str:
