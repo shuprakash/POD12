@@ -17,39 +17,65 @@ from support import (MODEL, SYSTEM_PROMPT, call_local, execute_tool, mcp_client,
 MAX_TOOL_CALLS = 8  # Larkspur's own build capped the loop here; then a human takes over.
 
 TONE_ADDENDUM = ""                       # ✏️ Build 4, step 4.1, intelligence lane
-EXTRA_TOOLS: List[Dict[str, Any]] = [
+EXTRA_TOOLS: List[Dict[str, Any]] = [    # ✏️ Build 2, step 2.1: schemas for the tools you add
     {
         "name": "next_available_day",
         "description": (
-            "Finds the earliest date with at least one open seat between an origin and "
-            "destination, starting from a given date. NOTE: This function only checks "
-            "for a single seat (party of one). If the booking has multiple passengers, "
-            "do not promise they can all fly on this day without checking full capacity. "
-            "Call this only after you know the origin, destination, and the date to "
-            "start searching from."
+            "Answer the one question a stranded customer asks first: what is the "
+            "earliest date they can actually fly this route. Returns a single date "
+            "and nothing else. Reach for this when the customer asks when they can "
+            "get out, whether anything is available sooner, or whether they are stuck "
+            "overnight — a question about WHICH DAY, not about which flight. Use "
+            "search_alternatives instead once they want to choose and be moved: that "
+            "one returns the flights themselves with times, seats and an option_id you "
+            "can hold. This tool cannot hold or book anything. It checks live "
+            "inventory, so the day it gives is real availability rather than the "
+            "policy window check_policy describes: check_policy says how far the "
+            "waiver stretches, this says what is actually open. Call lookup_booking "
+            "first, because this needs the route and date off the booking rather than "
+            "a PNR. An empty answer means no seat on any day in the search horizon, "
+            "which is a reason to escalate rather than to retry."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "origin": {"type": "string"},
-                "dest": {"type": "string"},
-                "date": {"type": "string", "description": "YYYY-MM-DD"},
-                "cabin": {"type": "string", "default": "Y"}
+                "origin": {
+                    "type": "string",
+                    "description": (
+                        "Three-letter IATA code the customer departs from, copied from the "
+                        "disrupted segment in lookup_booking, e.g. DEN."
+                    ),
+                },
+                "dest": {
+                    "type": "string",
+                    "description": (
+                        "Three-letter IATA code they are trying to reach, from the same "
+                        "segment, e.g. AUS."
+                    ),
+                },
+                "date": {
+                    "type": "string",
+                    "description": (
+                        "The disrupted segment's date as YYYY-MM-DD, e.g. 2025-05-08. The "
+                        "search starts here and looks forward, so pass the original date, "
+                        "not today's and not a date you hope is free."
+                    ),
+                },
+                "cabin": {
+                    "type": "string",
+                    "description": (
+                        "Booking class from the segment, e.g. Y for economy. Defaults to Y "
+                        "when omitted; pass the booked cabin so the day returned is one the "
+                        "customer's fare can actually use."
+                    ),
+                },
             },
-            "required": ["origin", "dest", "date"]
-        }
-    }
+            "required": ["origin", "dest", "date"],
+        },
+    },
 ]
-# LOCAL_TOOLS: Dict[str, Any] = {
-#     "next_available_day": next_available_day
-# }
 LOCAL_TOOLS: Dict[str, Any] = {}         # ✏️ Build 2, step 2.1: the functions behind them
-# Step 2.2: next_available_day is served by the MCP server, which carried it all
-# along, so the local registration came out. Only one program may own a tool name:
-# tool_results() checks mcp_client.tool_names before LOCAL_TOOLS, so a local copy
-# of an MCP name is unreachable code that still looks live. The schema stays in
-# EXTRA_TOOLS either way -- Claude still has to be told the tool exists.
- 
+
 
 def text_of(response) -> str:
     """Given. The last non-empty text block, never content[0]."""
